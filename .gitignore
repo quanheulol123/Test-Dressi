@@ -13,8 +13,9 @@ db.sqlite3
 
 # Env & Secrets
 .env
-*.json
+# Keep generic JSON files tracked; ignore only secrets explicitly.
 key.json
+secrets.json
 
 # Backup / dump files
 *.dump
