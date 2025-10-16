@@ -13,6 +13,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 import os
 from pathlib import Path
 from dotenv import load_dotenv
+from urllib.parse import urlparse
 
 load_dotenv()
 
@@ -32,16 +33,38 @@ def _env_flag(name: str, default: bool = False) -> bool:
         return default
     return value.lower() in {"1", "true", "yes", "on"}
 
+def _split_csv(value: str | None) -> list[str]:
+    if not value:
+        return []
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+def _dedupe(seq: list[str]) -> list[str]:
+    seen: dict[str, None] = {}
+    for item in seq:
+        if item not in seen:
+            seen[item] = None
+    return list(seen.keys())
+
+def _normalize_host(url: str) -> str | None:
+    if not url:
+        return None
+    parsed = urlparse(url)
+    if parsed.scheme and parsed.netloc:
+        return parsed.netloc
+    return url.strip() or None
+
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = _env_flag("DJANGO_DEBUG", False)
 
-allowed_hosts = os.getenv("DJANGO_ALLOWED_HOSTS", "127.0.0.1,localhost")
-ALLOWED_HOSTS = [host.strip() for host in allowed_hosts.split(",") if host.strip()]
+allowed_hosts = _split_csv(os.getenv("DJANGO_ALLOWED_HOSTS"))
+if not allowed_hosts:
+    allowed_hosts = ["127.0.0.1", "localhost"]
+allowed_hosts.extend([".vercel.app"])
+ALLOWED_HOSTS = _dedupe(allowed_hosts)
 
-csrf_trusted = os.getenv("DJANGO_CSRF_TRUSTED_ORIGINS", "")
-CSRF_TRUSTED_ORIGINS = [
-    origin.strip() for origin in csrf_trusted.split(",") if origin.strip()
-]
+csrf_trusted = _split_csv(os.getenv("DJANGO_CSRF_TRUSTED_ORIGINS"))
+csrf_trusted.append("https://*.vercel.app")
+CSRF_TRUSTED_ORIGINS = _dedupe(csrf_trusted)
 
 MEDIA_ROOT = os.path.join(BASE_DIR, "media")
 MEDIA_URL = "/media/"
@@ -60,16 +83,19 @@ INSTALLED_APPS = [
     "rest_framework",
 ]
 
-cors_origins = os.getenv("DJANGO_CORS_ALLOWED_ORIGINS")
+cors_origins = _split_csv(os.getenv("DJANGO_CORS_ALLOWED_ORIGINS"))
 if cors_origins:
-    CORS_ALLOWED_ORIGINS = [
-        origin.strip() for origin in cors_origins.split(",") if origin.strip()
-    ]
+    CORS_ALLOWED_ORIGINS = cors_origins
 else:
     CORS_ALLOWED_ORIGINS = [
         "http://localhost:5173",
         "http://127.0.0.1:5173",
     ]
+
+# Allow any Vercel deployment subdomain by default.
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    r"^https://([a-z0-9-]+\.)?vercel\.app$",
+]
 
 CORS_ALLOW_HEADERS = [
     "authorization",
@@ -78,6 +104,18 @@ CORS_ALLOW_HEADERS = [
     "origin",
     "x-csrftoken",
 ]
+
+additional_frontend = _split_csv(os.getenv("DJANGO_FRONTEND_ORIGINS"))
+vercel_frontend = os.getenv("VERCEL_FRONTEND_URL")
+if vercel_frontend:
+    additional_frontend.append(vercel_frontend.rstrip("/"))
+
+if additional_frontend:
+    normalized_frontend = [value.rstrip("/") for value in additional_frontend]
+    CORS_ALLOWED_ORIGINS = _dedupe(CORS_ALLOWED_ORIGINS + normalized_frontend)
+    CSRF_TRUSTED_ORIGINS = _dedupe(CSRF_TRUSTED_ORIGINS + normalized_frontend)
+    derived_hosts = filter(None, (_normalize_host(url) for url in normalized_frontend))
+    ALLOWED_HOSTS = _dedupe(ALLOWED_HOSTS + list(derived_hosts))
 
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',  # <- move this to the top

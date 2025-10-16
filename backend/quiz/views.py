@@ -607,6 +607,14 @@ def generate_outfits(request):
             print(f"[DEBUG] Error generating image for '{prompt_text}': {exc}")
 
     outfits = []
+    def _store_async(bytes_payload: bytes, filename: str, tags: list[str]) -> None:
+        try:
+            r2_url = upload_to_r2(filename, bytes_payload)
+            if r2_url:
+                save_image_metadata(filename, tags, r2_url)
+        except Exception as exc:
+            print(f"[DEBUG] Error persisting generated image '{filename}': {exc}")
+
     for image_bytes in ai_images:
         img_b64 = base64.b64encode(image_bytes).decode("utf-8")
         random_suffix = ''.join(random.choices(string.ascii_lowercase + string.digits, k=6))
@@ -621,9 +629,11 @@ def generate_outfits(request):
             "source_url": None
         })
 
-        r2_url = upload_to_r2(storage_name, image_bytes)
-        if r2_url:
-            save_image_metadata(storage_name, prompt_tokens, r2_url)
+        threading.Thread(
+            target=_store_async,
+            args=(image_bytes, storage_name, prompt_tokens[:]),
+            daemon=True,
+        ).start()
 
     random.shuffle(outfits)
     return JsonResponse({"outfits": outfits[:image_count]})
