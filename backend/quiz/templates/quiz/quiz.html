@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Quiz Page</title>
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'quiz/style.css' %}">
+    <script>
+        // CSRF token helper for Django
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let cookie of cookies) {
+                    cookie = cookie.trim();
+                    if (cookie.startsWith(name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+    </script>
+</head>
+
+<body>
+    <h1>Find Your Outfit</h1>
+
+    <!-- Style Selection -->
+    <div>
+        <p>Pick your style(s):</p>
+        <button type="button" class="multi-btn" data-category="style" data-value="Casual">Casual</button>
+        <button type="button" class="multi-btn" data-category="style" data-value="Sporty">Sporty</button>
+        <button type="button" class="multi-btn" data-category="style" data-value="Formal">Formal</button>
+        <button type="button" class="multi-btn" data-category="style" data-value="Party">Party</button>
+        <button type="button" class="multi-btn" data-category="style" data-value="Vintage">Vintage</button>
+        <button type="button" class="multi-btn" data-category="style" data-value="Summer">Summer</button>
+    </div>
+
+    <!-- Colour Selection -->
+    <div>
+        <p>Pick your colour(s):</p>
+        <button type="button" class="multi-btn" data-category="colour" data-value="Red"
+            style="background:red;color:white">Red</button>
+        <button type="button" class="multi-btn" data-category="colour" data-value="Blue"
+            style="background:blue;color:white">Blue</button>
+        <button type="button" class="multi-btn" data-category="colour" data-value="Black"
+            style="background:black;color:white">Black</button>
+        <button type="button" class="multi-btn" data-category="colour" data-value="White"
+            style="background:white;color:black;border:1px solid #000">White</button>
+        <button type="button" class="multi-btn" data-category="colour" data-value="Green"
+            style="background:green;color:white">Green</button>
+    </div>
+
+    <div>
+        <p>Pick your age group:</p>
+        <button type="button" class="multi-btn" data-category="age" data-value="young">Teenager 12-18</button>
+        <button type="button" class="multi-btn" data-category="age" data-value="adult">Young Adult 18-30</button>
+        <button type="button" class="multi-btn" data-category="age" data-value="middle aged">Middle Aged 30-49</button>
+        <button type="button" class="multi-btn" data-category="age" data-value="senior">Senior 50+</button>
+    </div>
+
+    <!-- Skin Tone (single choice) -->
+    <div>
+        <p>Skin tone:</p>
+        <button type="button" class="single-btn" data-category="skinTone" data-value="Fair">Fair</button>
+        <button type="button" class="single-btn" data-category="skinTone" data-value="Medium">Medium</button>
+        <button type="button" class="single-btn" data-category="skinTone" data-value="Olive">Olive</button>
+        <button type="button" class="single-btn" data-category="skinTone" data-value="Dark">Dark</button>
+    </div>
+
+    <!-- Body Shape (single choice) -->
+    <div>
+        <p>Body shape:</p>
+        <button type="button" class="single-btn" data-category="bodyShape" data-value="Rectangle">Rectangle</button>
+        <button type="button" class="single-btn" data-category="bodyShape" data-value="Hourglass">Hourglass</button>
+        <button type="button" class="single-btn" data-category="bodyShape" data-value="Pear">Pear</button>
+        <button type="button" class="single-btn" data-category="bodyShape" data-value="Apple">Apple</button>
+        <button type="button" class="single-btn" data-category="bodyShape" data-value="Inverted Triangle">Inverted
+            Triangle</button>
+    </div>
+
+    <button onclick="submitQuiz()">Get Recommendations</button>
+
+    <h2>Recommendations:</h2>
+    <div id="results"></div>
+
+    <script>
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let cookie of cookies) {
+                cookie = cookie.trim();
+                if (cookie.startsWith(name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+
+    const csrftoken = getCookie('csrftoken');
+
+    const selections = {
+        style: [],
+        colour: [],
+        skinTone: '',
+        bodyShape: ''
+    };
+
+    // Multi-selection buttons
+    document.querySelectorAll('.multi-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const cat = btn.dataset.category;
+            const val = btn.dataset.value;
+
+            if (!selections[cat].includes(val)) {
+                selections[cat].push(val);
+                btn.classList.add('selected');
+            } else {
+                selections[cat] = selections[cat].filter(v => v !== val);
+                btn.classList.remove('selected');
+            }
+        });
+    });
+
+    // Single-selection buttons
+    document.querySelectorAll('.single-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const cat = btn.dataset.category;
+            selections[cat] = btn.dataset.value;
+            document.querySelectorAll(`.single-btn[data-category="${cat}"]`).forEach(b => b.classList.remove('selected'));
+            btn.classList.add('selected');
+        });
+    });
+
+    async function submitQuiz() {
+        try {
+            const headers = {
+                "Content-Type": "application/json",
+                "X-CSRFToken": csrftoken
+            };
+
+            const accessToken = localStorage.getItem('access_token');
+            if (accessToken) {
+                headers["Authorization"] = `Bearer ${accessToken}`;
+            }
+
+            const res = await fetch("/api/recommend/", {
+                method: "POST",
+                headers,
+                body: JSON.stringify(selections)
+            });
+
+            if (!res.ok) {
+                const err = await res.json();
+                console.error("Error response:", err);
+                alert("Failed to get recommendations. Check console.");
+                return;
+            }
+
+            const data = await res.json();
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '';
+
+            if (!data.outfits || data.outfits.length === 0) {
+                resultsDiv.innerHTML = '<p>No outfits found for your selections.</p>';
+                return;
+            }
+
+            data.outfits.forEach((outfit, i) => {
+                const div = document.createElement('div');
+                div.style.marginBottom = '20px';
+
+                const nameEl = document.createElement('h3');
+                nameEl.textContent = `Outfit ${i + 1}: ${outfit.name || 'Generated'}`;
+                div.appendChild(nameEl);
+
+                const imgEl = document.createElement('img');
+                imgEl.src = outfit.image || outfit.source_url;
+                imgEl.alt = outfit.name || 'Outfit Image';
+                imgEl.style.width = '200px';
+                imgEl.style.borderRadius = '8px';
+
+                div.appendChild(imgEl);
+                resultsDiv.appendChild(div);
+            });
+
+        } catch (err) {
+            console.error("Fetch error:", err);
+            alert("Error fetching recommendations. See console.");
+        }
+    }
+</script>
+
+    <style>
+        button.selected {
+            border: 3px solid green;
+        }
+
+        button {
+            margin: 4px;
+            padding: 8px 12px;
+            cursor: pointer;
+            border-radius: 6px;
+        }
+    </style>
+</body>
+
+</html>

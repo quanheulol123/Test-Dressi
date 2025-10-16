@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Quiz Page</title>
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'quiz/style.css' %}">
+    <style>
+        button.selected {
+            border: 3px solid green;
+        }
+
+        button {
+            margin: 4px;
+            padding: 8px 12px;
+            cursor: pointer;
+            border-radius: 6px;
+        }
+
+        #results {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-top: 16px;
+        }
+
+        .outfit-card {
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            padding: 8px;
+            width: 200px;
+            text-align: center;
+        }
+
+        .outfit-card img {
+            max-width: 100%;
+            border-radius: 4px;
+        }
+
+        .save-btn {
+            margin-top: 8px;
+            padding: 6px 10px;
+            cursor: pointer;
+            border-radius: 4px;
+            background-color: #28a745;
+            color: white;
+            border: none;
+        }
+
+        #login-section {
+            margin-bottom: 20px;
+        }
+
+        input {
+            margin: 4px;
+            padding: 6px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Find Your Outfit</h1>
+
+    <!-- Login Section -->
+    <div id="login-section">
+        <input type="text" id="username" placeholder="Username">
+        <input type="password" id="password" placeholder="Password">
+        <button onclick="loginUser(
+            document.getElementById('username').value,
+            document.getElementById('password').value
+        )">Log In</button>
+        <span id="login-status"></span>
+    </div>
+
+    <!-- Style selection -->
+    <div>
+        <p>Pick your style(s):</p>
+        <button type="button" class="multi-btn" data-category="style" data-value="Casual">Casual</button>
+        <button type="button" class="multi-btn" data-category="style" data-value="Sporty">Sporty</button>
+        <button type="button" class="multi-btn" data-category="style" data-value="Formal">Formal</button>
+        <button type="button" class="multi-btn" data-category="style" data-value="Party">Party</button>
+        <button type="button" class="multi-btn" data-category="style" data-value="Vintage">Vintage</button>
+        <button type="button" class="multi-btn" data-category="style" data-value="Summer">Summer</button>
+    </div>
+
+    <!-- Colour selection -->
+    <div>
+        <p>Pick your colour(s):</p>
+        <button type="button" class="multi-btn" data-category="colour" data-value="Red"
+            style="background:red;color:white">Red</button>
+        <button type="button" class="multi-btn" data-category="colour" data-value="Blue"
+            style="background:blue;color:white">Blue</button>
+        <button type="button" class="multi-btn" data-category="colour" data-value="Black"
+            style="background:black;color:white">Black</button>
+        <button type="button" class="multi-btn" data-category="colour" data-value="White"
+            style="background:white;color:black;border:1px solid #000">White</button>
+        <button type="button" class="multi-btn" data-category="colour" data-value="Green"
+            style="background:green;color:white">Green</button>
+    </div>
+
+    <!-- Skin tone -->
+    <div>
+        <p>Skin tone:</p>
+        <button type="button" class="single-btn" data-category="skinTone" data-value="Fair">Fair</button>
+        <button type="button" class="single-btn" data-category="skinTone" data-value="Medium">Medium</button>
+        <button type="button" class="single-btn" data-category="skinTone" data-value="Olive">Olive</button>
+        <button type="button" class="single-btn" data-category="skinTone" data-value="Dark">Dark</button>
+    </div>
+
+    <!-- Body shape -->
+    <div>
+        <p>Body shape:</p>
+        <button type="button" class="single-btn" data-category="bodyShape" data-value="Rectangle">Rectangle</button>
+        <button type="button" class="single-btn" data-category="bodyShape" data-value="Hourglass">Hourglass</button>
+        <button type="button" class="single-btn" data-category="bodyShape" data-value="Pear">Pear</button>
+        <button type="button" class="single-btn" data-category="bodyShape" data-value="Apple">Apple</button>
+        <button type="button" class="single-btn" data-category="bodyShape" data-value="Inverted Triangle">Inverted
+            Triangle</button>
+    </div>
+
+    <!-- Weather filter -->
+    <div>
+        <p>Use weather filter?</p>
+        <button type="button" id="weather-toggle" data-value="off">Weather: OFF</button>
+    </div>
+
+    <button onclick="submitQuiz()">Get Recommendations</button>
+    <button onclick="loadWardrobe()">View Wardrobe</button>
+
+    <h2>Results:</h2>
+    <div id="results"></div>
+
+    <script>
+        const selections = { style: [], colour: [], skinTone: '', bodyShape: '' };
+        let useWeather = false;
+        let pollInterval = null;
+
+        // Multi-select buttons
+        document.querySelectorAll('.multi-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const cat = btn.dataset.category, val = btn.dataset.value;
+                if (!selections[cat].includes(val)) {
+                    selections[cat].push(val);
+                    btn.classList.add('selected');
+                } else {
+                    selections[cat] = selections[cat].filter(v => v !== val);
+                    btn.classList.remove('selected');
+                }
+            });
+        });
+
+        // Single-select buttons
+        document.querySelectorAll('.single-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const cat = btn.dataset.category;
+                selections[cat] = btn.dataset.value;
+                document.querySelectorAll(`.single-btn[data-category="${cat}"]`).forEach(b => b.classList.remove('selected'));
+                btn.classList.add('selected');
+            });
+        });
+
+        // Weather toggle
+        document.getElementById("weather-toggle").addEventListener("click", e => {
+            useWeather = !useWeather;
+            e.target.dataset.value = useWeather ? "on" : "off";
+            e.target.textContent = `Weather: ${useWeather ? "ON" : "OFF"}`;
+        });
+
+        // Login
+        async function loginUser(username, password) {
+            const res = await fetch("/api/login_mongo/", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ username, password })
+            });
+            const data = await res.json();
+            if (res.ok && data.access) {
+                const token = data.access.replace(/^"|"$/g, '');
+                localStorage.setItem("access_token", token);
+                document.getElementById("login-status").textContent = "Logged in!";
+            } else {
+                document.getElementById("login-status").textContent = "Login failed!";
+                console.error(data);
+            }
+        }
+
+        // Save to wardrobe
+        async function saveToWardrobe(outfit) {
+            const accessToken = localStorage.getItem('access_token');
+            if (!accessToken) { alert("Log in first."); return; }
+
+            const filename = outfit.name || outfit.filename;
+            const image_url = outfit.source_url || outfit.image || outfit.image_url;
+            const tags = outfit.tags || [];
+
+            const res = await fetch("/api/save_image/", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${accessToken}`
+                },
+                body: JSON.stringify({ filename, image_url, tags })
+            });
+
+            alert(res.ok ? "Saved!" : "Failed to save.");
+        }
+
+        // Load wardrobe
+        async function loadWardrobe() {
+            const accessToken = localStorage.getItem('access_token');
+            if (!accessToken) { alert("Log in first."); return; }
+
+            const res = await fetch("/api/get_wardrobe/", {
+                method: "GET",
+                headers: { "Authorization": `Bearer ${accessToken}` }
+            });
+
+            if (!res.ok) { alert("Failed to load wardrobe."); return; }
+
+            const data = await res.json();
+            const resultsDiv = document.getElementById("results");
+            resultsDiv.innerHTML = "";
+            displayImages(data.wardrobe, false);
+        }
+
+        // Submit quiz
+        async function submitQuiz() {
+            // Stop previous polling if any
+            if (pollInterval) clearInterval(pollInterval);
+
+            const res = await fetch("/api/recommend/", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ ...selections, use_weather: useWeather })
+            });
+
+            if (!res.ok) { alert("Failed to get recommendations."); return; }
+
+            const data = await res.json();
+            const resultsDiv = document.getElementById("results");
+            resultsDiv.innerHTML = "";
+
+            // Display any immediate recommendations
+            if (data.outfits) displayImages(data.outfits, true);
+
+            // Start polling for AI-generated images every 3 seconds
+            pollInterval = setInterval(async () => {
+                const pollRes = await fetch("/api/get_generated_images/", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(selections)
+                });
+                if (!pollRes.ok) return;
+                const pollData = await pollRes.json();
+                if (pollData.outfits && pollData.outfits.length) {
+                    displayImages(pollData.outfits, true);
+                }
+            }, 3000);
+        }
+
+        // Display images
+        function displayImages(images, allowSave) {
+            const resultsDiv = document.getElementById("results");
+
+            images.forEach(img => {
+                const cardId = img.name || img.filename;
+                if (document.getElementById(cardId)) return; // Skip duplicates
+
+                const card = document.createElement("div");
+                card.className = "outfit-card";
+                card.id = cardId;
+
+                const image = document.createElement("img");
+                image.src = img.image || img.image_url;
+                card.appendChild(image);
+
+                const name = document.createElement("p");
+                name.textContent = cardId;
+                card.appendChild(name);
+
+                if (allowSave) {
+                    const saveBtn = document.createElement("button");
+                    saveBtn.className = "save-btn";
+                    saveBtn.textContent = "Save to Wardrobe";
+                    saveBtn.onclick = () => saveToWardrobe(img);
+                    card.appendChild(saveBtn);
+                }
+
+                resultsDiv.appendChild(card);
+            });
+        }
+    </script>
+
+</body>
+
+</html>

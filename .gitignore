@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.sqlite3
+*.log
+
+# Django
+db.sqlite3
+/media
+/staticfiles
+
+# Env & Secrets
+.env
+*.json
+key.json
+
+# Backup / dump files
+*.dump
+*.sql
+
+# Virtualenv
+.venv/
+venv/
+env/
+
+# Node
+node_modules/
+dist/
+build/
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+DEPLOYMENT.md

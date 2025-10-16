@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Find Your Outfit</title>
+    <style>
+        /* Minimal styling from your React code */
+        body { font-family: sans-serif; background: #f3f4f6; padding: 20px; }
+        .btn { padding: 8px 16px; border-radius: 6px; border: 1px solid #333; cursor: pointer; margin: 4px; }
+        .btn.selected { background-color: green; color: white; }
+        .outfit { background: white; padding: 12px; border-radius: 8px; margin-bottom: 16px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); cursor: pointer; }
+        img { border-radius: 6px; max-width: 100%; }
+    </style>
+</head>
+<body>
+    <h1>Find Your Outfit</h1>
+
+    <!-- Weather Toggle -->
+    <label>
+        Filter by current weather:
+        <input type="checkbox" id="weatherToggle" checked>
+    </label>
+    <span id="weatherInfo"></span>
+
+    <!-- Styles -->
+    <div>
+        <p>Pick your style(s):</p>
+        {% for s in styles %}
+        <button class="btn style-btn" data-value="{{ s }}">{{ s }}</button>
+        {% endfor %}
+    </div>
+
+    <!-- Colours -->
+    <div>
+        <p>Pick your colour(s):</p>
+        {% for c in colours %}
+        <button class="btn colour-btn" data-value="{{ c }}">{{ c }}</button>
+        {% endfor %}
+    </div>
+
+    <!-- Skin Tone -->
+    <div>
+        <p>Pick your skin tone:</p>
+        {% for tone in skin_tones %}
+        <button class="btn skin-btn" data-value="{{ tone }}">{{ tone }}</button>
+        {% endfor %}
+    </div>
+
+    <!-- Body Shape -->
+    <div>
+        <p>Pick your body shape:</p>
+        {% for shape in body_shapes %}
+        <button class="btn body-btn" data-value="{{ shape }}">{{ shape }}</button>
+        {% endfor %}
+    </div>
+
+    <button id="submitBtn" class="btn" style="background: green; color: white;">Get Recommendations</button>
+
+    <!-- Results -->
+    <div id="results"></div>
+
+    <script>
+        const toggleSelection = (arr, value) => {
+            const index = arr.indexOf(value);
+            if(index >= 0) arr.splice(index, 1);
+            else arr.push(value);
+        };
+
+        let styles = [], colours = [], skinTone = '', bodyShape = '', weatherEnabled = true;
+
+        document.querySelectorAll('.style-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                toggleSelection(styles, btn.dataset.value);
+                btn.classList.toggle('selected');
+            });
+        });
+
+        document.querySelectorAll('.colour-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                toggleSelection(colours, btn.dataset.value);
+                btn.classList.toggle('selected');
+            });
+        });
+
+        document.querySelectorAll('.skin-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                skinTone = btn.dataset.value;
+                document.querySelectorAll('.skin-btn').forEach(b => b.classList.remove('selected'));
+                btn.classList.add('selected');
+            });
+        });
+
+        document.querySelectorAll('.body-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                bodyShape = btn.dataset.value;
+                document.querySelectorAll('.body-btn').forEach(b => b.classList.remove('selected'));
+                btn.classList.add('selected');
+            });
+        });
+
+        document.getElementById('weatherToggle').addEventListener('change', e => {
+            weatherEnabled = e.target.checked;
+        });
+
+        document.getElementById('submitBtn').addEventListener('click', async () => {
+            const accessToken = localStorage.getItem("access_token");
+            if (!accessToken) {
+                alert("You must log in first");
+                return;
+            }
+
+            const response = await fetch("{% url 'recommend' %}", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${accessToken}`
+                },
+                body: JSON.stringify({
+                    style: styles,
+                    colour: colours,
+                    skinTone: skinTone,
+                    bodyShape: bodyShape,
+                    weather_enabled: weatherEnabled
+                })
+            });
+
+            if (!response.ok) {
+                const err = await response.json();
+                alert("Error: " + (err.detail || "Request failed"));
+                return;
+            }
+
+            const data = await response.json();
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '';
+
+            data.outfits.forEach((outfit, i) => {
+                const div = document.createElement('div');
+                div.className = 'outfit';
+                let html = `<h3>Outfit ${i+1}</h3>`;
+                if (outfit.image) html += `<img src="${outfit.image}" width="150">`;
+                div.innerHTML = html;
+                resultsDiv.appendChild(div);
+            });
+
+            document.getElementById('weatherInfo').textContent = `Temp: ${data.temperature || ''}°C | Country: ${data.country || ''}`;
+        });
+    </script>
+</body>
+</html>

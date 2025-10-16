@@ -1,0 +1,28 @@
+venv/
+__pycache__/
+backend/__pycache__/
+node_modules
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environment
+myenv/
+.venv311/
+env/
+.venv312/
+isrgrootx1.pem
+
+# Django / project specific
+db.sqlite3
+/media/
+*.log
+*.pot
+*.pyc
+
+# IDE files
+.vscode/
+.idea/

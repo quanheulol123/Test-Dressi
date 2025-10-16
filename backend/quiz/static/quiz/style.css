@@ -1,0 +1,72 @@
+/* style.css */
+
+/* General button styles */
+button {
+    cursor: pointer;
+    transition: all 0.2s ease;
+    outline: none;
+}
+
+/* Circular colour buttons */
+.colour-btn {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    border: 2px solid #333;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+    margin-right: 8px;
+    color: black;
+    background-color: white;
+}
+
+.colour-btn.selected {
+    border: 3px solid green;
+    color: white;
+}
+
+/* Style buttons (rectangle style) */
+.style-btn {
+    padding: 8px 16px;
+    border-radius: 6px;
+    border: 1px solid #333;
+    margin-right: 8px;
+    background-color: white;
+    color: black;
+}
+
+.style-btn.selected {
+    background-color: green;
+    color: white;
+}
+
+/* Skin tone & body shape buttons (rectangle style) */
+.skin-btn, .body-btn {
+    padding: 8px 16px;
+    border-radius: 6px;
+    border: 1px solid #333;
+    margin-right: 8px;
+    background-color: white;
+    color: black;
+}
+
+.skin-btn.selected, .body-btn.selected {
+    background-color: green;
+    color: white;
+}
+
+/* Horizontal scrolling container */
+.horizontal-scroll {
+    display: flex;
+    gap: 8px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    margin-bottom: 16px;
+}
+
+/* Hover effects */
+button:hover {
+    transform: scale(1.05);
+}
