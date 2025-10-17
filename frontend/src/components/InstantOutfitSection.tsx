@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Sun,
@@ -12,10 +12,33 @@ import {
 import { motion } from "framer-motion";
 import { apiUrl } from "../lib/api";
 
-const weatherOptions = [
+type InstantOption = {
+  label: string;
+  value: string;
+  vibe: string;
+  description: string;
+  icon: React.JSX.Element;
+  style: string;
+  occasion: string;
+  featured: string;
+  title: string;
+  bg: string;
+};
+
+type OutfitResult = {
+  name: string;
+  image: string;
+  tags?: string[];
+  source_url?: string | null;
+};
+
+const MAX_BATCH = 12;
+
+const weatherOptions: InstantOption[] = [
   {
     label: "Sunny Vibes",
     value: "Sunny",
+    vibe: "sunny",
     description:
       "Effortless summer elegance with flowing fabrics, radiant colors, and that golden-hour glow that turns heads everywhere you go.",
     icon: <Sun className="h-8 w-8 text-yellow-400" />,
@@ -28,6 +51,7 @@ const weatherOptions = [
   {
     label: "Cloudy Vibes",
     value: "Cloudy",
+    vibe: "cloudy",
     description:
       "Sophisticated layering, muted tones, and luxe textures for moody days.",
     icon: <Cloud className="h-8 w-8 text-blue-400" />,
@@ -40,6 +64,7 @@ const weatherOptions = [
   {
     label: "Cold Vibes",
     value: "Cold",
+    vibe: "cold",
     description:
       "Chic cold weather couture with statement coats, cozy knits, and accessories.",
     icon: <Snowflake className="h-8 w-8 text-indigo-400" />,
@@ -55,6 +80,7 @@ const occasionOptions = [
   {
     label: "Work",
     value: "Work",
+    vibe: "work",
     description:
       "Power suits, sharp silhouettes, and confidence-boosting pieces.",
     icon: <Briefcase className="h-8 w-8 text-neutral-800" />,
@@ -67,6 +93,7 @@ const occasionOptions = [
   {
     label: "Casual",
     value: "Casual",
+    vibe: "casual",
     description:
       "Effortlessly cool street style that looks like you just stepped out of a magazine.",
     icon: <Shirt className="h-8 w-8 text-orange-500" />,
@@ -79,6 +106,7 @@ const occasionOptions = [
   {
     label: "Date Night",
     value: "Date",
+    vibe: "date",
     description: "Romantic elegance meets sultry sophistication.",
     icon: <Heart className="h-8 w-8 text-pink-500" />,
     style: "Party",
@@ -88,10 +116,6 @@ const occasionOptions = [
     bg: "bg-gradient-to-br from-pink-50 via-white to-pink-100",
   },
 ];
-
-type InstantOption =
-  | (typeof weatherOptions)[number]
-  | (typeof occasionOptions)[number];
 type InstantOutfitSectionProps = {
   setLoading?: (loading: boolean) => void;
 };
@@ -104,11 +128,16 @@ export default function InstantOutfitSection({
   const [outfit, setOutfit] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   const [showOptions, setShowOptions] = useState(true);
-  const [shownOutfits, setShownOutfits] = useState<string[]>([]);
+  const [seenByVibe, setSeenByVibe] = useState<Record<string, string[]>>({});
+  const [poolByVibe, setPoolByVibe] = useState<Record<string, OutfitResult[]>>(
+    {}
+  );
   const navigate = useNavigate();
   const selectedBackground = selected?.bg ?? "bg-neutral-100";
   const selectedIcon = selected?.icon;
   const selectedLabel = selected?.label ?? "Your vibe";
+  const normalizeVibe = (option: InstantOption | null) =>
+    option?.vibe.trim().toLowerCase() ?? "";
 
   async function handleInstant(opt: InstantOption) {
     setError(null);
@@ -118,25 +147,31 @@ export default function InstantOutfitSection({
     setLocalLoading(true);
     setLoading?.(true);
 
-    let excludeList = [...shownOutfits];
-    let generated = null;
-    let tries = 0;
-    const maxTries = 5;
-    let exhausted = false;
+    const vibeKeyRaw = normalizeVibe(opt);
+    const fallbackTag =
+      opt?.value?.toString().trim().toLowerCase() ||
+      opt?.label?.toString().trim().toLowerCase() ||
+      "instant";
+    const vibeKey = vibeKeyRaw || fallbackTag;
 
-    while (tries < maxTries && !generated) {
-      tries++;
+    let seenList = [...(seenByVibe[vibeKey] ?? [])];
+    let pool = [...(poolByVibe[vibeKey] ?? [])];
+    let attempts = 0;
+    const maxAttempts = 2;
+
+    while (pool.length === 0 && attempts < maxAttempts) {
+      attempts += 1;
       try {
         const response = await fetch(apiUrl("/quiz/recommend/"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             collection: "instantoutfit",
-            styles: [opt.style],
-            occasions: [opt.occasion],
+            styles: [vibeKey],
+            occasions: [],
             bodyShapes: [],
-            image_count: 1,
-            exclude_names: excludeList,
+            image_count: MAX_BATCH,
+            exclude_names: seenList,
           }),
         });
 
@@ -148,55 +183,82 @@ export default function InstantOutfitSection({
         const outfits = Array.isArray(data?.outfits)
           ? data.outfits.filter(Boolean)
           : [];
-        const uniqueExhausted = Boolean(data?.uniqueExhausted);
-        if (uniqueExhausted) {
-          exhausted = true;
-        }
-        const seenNames = new Set(excludeList);
+        const seenSet = new Set(seenList.map((name) => name.toLowerCase()));
+        const uniqueBatch: OutfitResult[] = [];
+        const batchSeen = new Set<string>();
 
-        let outfitCandidate = outfits.find(
-          (item: { name: string }) => item && !seenNames.has(item?.name)
-        );
-
-        if (!outfitCandidate && outfits.length > 0) {
-          outfitCandidate = outfits[0];
-        }
-
-        if (outfitCandidate) {
-          generated = outfitCandidate;
-          setShownOutfits((prev) => {
-            if (uniqueExhausted) {
-              return [outfitCandidate.name];
-            }
-            if (prev.includes(outfitCandidate.name)) {
-              return prev;
-            }
-            return [...prev, outfitCandidate.name];
-          });
-          if (uniqueExhausted) {
-            excludeList = [outfitCandidate.name];
-          } else if (!excludeList.includes(outfitCandidate.name)) {
-            excludeList = [...excludeList, outfitCandidate.name];
+        for (const raw of outfits) {
+          if (!raw) continue;
+          const nameValue =
+            typeof raw.name === "string" && raw.name.trim().length > 0
+              ? raw.name.trim()
+              : null;
+          const imageValue =
+            typeof raw.image === "string" && raw.image.trim().length > 0
+              ? raw.image.trim()
+              : null;
+          if (!nameValue && !imageValue) {
+            continue;
           }
-        } else if (uniqueExhausted) {
-          setShownOutfits([]);
-          excludeList = [];
+          const key = (nameValue ?? imageValue ?? "").toLowerCase();
+          if (!key || seenSet.has(key) || batchSeen.has(key)) {
+            continue;
+          }
+          batchSeen.add(key);
+          uniqueBatch.push({
+            name: nameValue ?? key,
+            image: imageValue ?? "",
+            tags: Array.isArray(raw.tags) ? raw.tags : undefined,
+            source_url:
+              typeof raw.source_url === "string" ? raw.source_url : undefined,
+          });
+        }
+
+        if (uniqueBatch.length > 0) {
+          pool = uniqueBatch;
+          setPoolByVibe((prev) => ({
+            ...prev,
+            [vibeKey]: uniqueBatch,
+          }));
+        } else if (seenList.length > 0) {
+          // Reset cycle and try again next iteration.
+          seenList = [];
+          setSeenByVibe((prev) => ({
+            ...prev,
+            [vibeKey]: [],
+          }));
+        } else {
+          break;
         }
       } catch (err) {
         setError("Error fetching instant outfit. Please try again.");
-        break;
+        setLocalLoading(false);
+        setLoading?.(false);
+        return;
       }
     }
 
-    if (generated) {
-      setOutfit(generated);
-    } else {
+    if (!pool.length) {
       setError(
-        exhausted
+        seenList.length
           ? "We just cycled through every available look - give it another moment or try a different vibe."
           : "No outfit found for that combo. Try another option!"
       );
+      setLocalLoading(false);
+      setLoading?.(false);
+      return;
     }
+
+    const [nextOutfit, ...remaining] = pool;
+    setOutfit(nextOutfit);
+    setPoolByVibe((prev) => ({
+      ...prev,
+      [vibeKey]: remaining,
+    }));
+    setSeenByVibe((prev) => ({
+      ...prev,
+      [vibeKey]: [...seenList, nextOutfit.name],
+    }));
 
     setLocalLoading(false);
     setLoading?.(false);
@@ -208,6 +270,28 @@ export default function InstantOutfitSection({
     setOutfit(null);
     setError(null);
     setLocalLoading(false);
+    setSeenByVibe((prev) => {
+      const key = normalizeVibe(selected);
+      if (!key) {
+        return prev;
+      }
+      if (!prev[key]?.length) {
+        return prev;
+      }
+      return {
+        ...prev,
+        [key]: [],
+      };
+    });
+    setPoolByVibe((prev) => {
+      const key = normalizeVibe(selected);
+      if (!key || !prev[key]?.length) {
+        return prev;
+      }
+      const clone = { ...prev };
+      delete clone[key];
+      return clone;
+    });
     setLoading?.(false);
   }
 

@@ -42,6 +42,7 @@ GENAI_API_KEY = os.getenv("GENAI_API_KEY")
 client = MongoClient(MONGO_URI)
 images_db = client["outfits"]
 collection = images_db["images"]
+instant_collection = images_db["instantoutfit"]
 users_db = client["users_db"]
 users_collection = users_db["users"]
 
@@ -638,6 +639,184 @@ def generate_outfits(request):
     random.shuffle(outfits)
     return JsonResponse({"outfits": outfits[:image_count]})
 
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+@csrf_exempt
+def generate_instant_vibe(request):
+    """Temporary helper to seed the instant outfit collection with curated vibes."""
+    try:
+        payload = json.loads(request.body or "{}")
+    except json.JSONDecodeError:
+        payload = {}
+
+    requested_count = payload.get("image_count") or payload.get("count") or 8
+    try:
+        count = int(requested_count)
+    except (TypeError, ValueError):
+        count = 8
+    count = max(1, min(count, 16))
+
+    vibe_input = str(payload.get("vibe") or "sunny").strip().lower()
+    vibe_config = {
+        "sunny": {
+            "name": "sunny",
+            "tag": "sunny",
+            "prompt": (
+                "sunny vibe, warm glow, breezy fabrics, vibrant yet wearable palette, "
+                "normal but fashionable styling"
+            ),
+            "suffix": "instant_sunny",
+        },
+        "cloudy": {
+            "name": "cloudy",
+            "tag": "cloudy",
+            "prompt": (
+                "cloudy day vibe, cozy layered styling, refined neutrals, chic and wearable, "
+                "normal proportions, elevated street style"
+            ),
+            "suffix": "instant_cloudy",
+        },
+        "cold": {
+            "name": "cold",
+            "tag": "cold",
+            "prompt": (
+                "cold weather vibe, layered outerwear, luxe knits, rich textures, "
+                "fashionable yet practical warmth, crisp and polished styling"
+            ),
+            "suffix": "instant_cold",
+        },
+        "date": {
+            "name": "date",
+            "tag": "date",
+            "prompt": (
+                "date night vibe, elevated romantic styling, flattering silhouettes, "
+                "modern glamour, wearable elegance, confident but natural"
+            ),
+            "suffix": "instant_date",
+        },
+        "work": {
+            "name": "work",
+            "tag": "work",
+            "prompt": (
+                "workday vibe, polished tailoring, sharp silhouettes, refined neutrals, "
+                "power dressing that remains wearable and modern"
+            ),
+            "suffix": "instant_work",
+        },
+        "casual": {
+            "name": "casual",
+            "tag": "casual",
+            "prompt": (
+                "casual vibe, effortless street style, relaxed yet put-together silhouette, "
+                "trend-aware layering, wearable comfort with polish"
+            ),
+            "suffix": "instant_casual",
+        },
+    }
+
+    normalized_input = vibe_input.replace("-", " ").replace("_", " ").strip()
+    alias_map = {
+        "sun": "sunny",
+        "sunny": "sunny",
+        "sunny vibe": "sunny",
+        "sunny vibes": "sunny",
+        "cloud": "cloudy",
+        "cloudy": "cloudy",
+        "cloudy vibe": "cloudy",
+        "cloudy vibes": "cloudy",
+        "overcast": "cloudy",
+        "cold": "cold",
+        "cold vibe": "cold",
+        "cold vibes": "cold",
+        "winter": "cold",
+        "winter vibe": "cold",
+        "chilly": "cold",
+        "date": "date",
+        "date night": "date",
+        "date-night": "date",
+        "romantic": "date",
+        "evening": "date",
+        "night out": "date",
+        "work": "work",
+        "work vibe": "work",
+        "office": "work",
+        "boardroom": "work",
+        "career": "work",
+        "formal": "work",
+        "casual": "casual",
+        "casual vibe": "casual",
+        "off duty": "casual",
+        "off-duty": "casual",
+        "weekend": "casual",
+        "street": "casual",
+        "street style": "casual",
+    }
+    vibe_key = alias_map.get(normalized_input)
+    if not vibe_key and " " in normalized_input:
+        vibe_key = alias_map.get(normalized_input.split(" ")[0])
+    if not vibe_key:
+        vibe_key = normalized_input or "sunny"
+
+    config = vibe_config.get(vibe_key) or vibe_config["sunny"]
+    vibe = config["name"]
+
+    base_prompt = (
+        "women's fashion single outfit flatlay, high quality, white background, "
+        f"{config['prompt']}, photo-real, no distortions, no awkward outfits"
+    )
+
+    created: list[dict[str, str]] = []
+    errors: list[str] = []
+
+    for idx in range(count):
+        prompt_text = f"{base_prompt}, different variation {idx + 1}"
+        try:
+            response = genai_client.models.generate_content(
+                model="gemini-2.5-flash-image-preview",
+                contents=[prompt_text],
+            )
+
+            image_bytes = None
+            for part in response.candidates[0].content.parts:
+                if getattr(part, "inline_data", None):
+                    image_bytes = part.inline_data.data
+                    break
+
+            if not image_bytes:
+                errors.append(f"No image returned for variation {idx + 1}")
+                continue
+
+            random_suffix = "".join(
+                random.choices(string.ascii_lowercase + string.digits, k=6)
+            )
+            filename = f"{config['suffix']}___{random_suffix}.png"
+            r2_url = upload_to_r2(filename, image_bytes)
+            if not r2_url:
+                errors.append(f"Upload failed for {filename}")
+                continue
+
+            document = {
+                "filename": filename,
+                "tags": [config["tag"]],
+                "created_at": datetime.utcnow(),
+                "images": {"full": r2_url, "thumbnail": r2_url},
+                "source_url": r2_url,
+                "collection": "instantoutfit",
+                "is_ai": True,
+                "prompt": prompt_text,
+                "seed_source": f"generate_instant_vibe::{vibe}",
+                "vibe": vibe,
+            }
+            instant_collection.insert_one(document)
+            created.append({"filename": filename, "image": r2_url, "vibe": vibe})
+        except Exception as exc:  # pragma: no cover - seeding utility
+            errors.append(str(exc))
+
+    status_code = 200 if created else 500
+    return JsonResponse({"created": created, "errors": errors}, status=status_code)
+
+
 @api_view(["POST"])
 @permission_classes([AllowAny])
 @csrf_exempt
@@ -744,7 +923,8 @@ def recommend(request):
     else:
         weather_data = None
 
-    enforce_filters = should_generate
+    is_custom_collection = bool(collection_name) and image_collection.name != collection.name
+    enforce_filters = should_generate or is_custom_collection
     expanded_queries = expand_queries(base_tags) if enforce_filters else []
     required_tags = set(base_tags) if enforce_filters else set()
 

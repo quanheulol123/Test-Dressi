@@ -33,6 +33,7 @@ urlpatterns = [
     path("api/signup_mongo/", views.signup_mongo, name="signup_mongo"),
     path("api/recommend/", views.recommend, name="recommend"),
     path("api/generate/", views.generate_outfits, name="generate_outfits"),
+    path("api/generate_instant_vibe/", views.generate_instant_vibe, name="generate_instant_vibe"),
     path("quiz/generate/", views.generate_outfits, name="quiz_generate"),
     path("api/save_image/", views.save_image, name="save_image"),
     path("api/get_wardrobe/", views.get_wardrobe, name="get_wardrobe"),
