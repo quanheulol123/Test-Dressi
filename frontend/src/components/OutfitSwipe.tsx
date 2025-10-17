@@ -7,6 +7,7 @@ import {
   useMotionValue,
   useTransform,
 } from "framer-motion";
+import type { Variants } from "framer-motion";
 
 type Outfit = {
   name: string;
@@ -24,6 +25,45 @@ type OutfitCard = Outfit & {
 const PLACEHOLDER_COUNT = 4;
 const TOTAL_OUTFIT_COUNT = 20;
 const INITIAL_FETCH_COUNT = TOTAL_OUTFIT_COUNT - PLACEHOLDER_COUNT;
+const skeletonVariants: Variants = {
+  initial: { backgroundPositionX: "0%" },
+  animate: {
+    backgroundPositionX: ["0%", "100%", "0%"],
+    transition: { duration: 1.6, repeat: Infinity, ease: "linear" },
+  },
+};
+
+function PlaceholderSkeleton() {
+  return (
+    <div className="absolute inset-0 z-10 flex h-full w-full flex-col items-center justify-center gap-6 bg-[#181c24]">
+      <motion.div
+        className="relative h-[72%] w-[78%] overflow-hidden rounded-[24px] border border-white/10"
+        initial="initial"
+        animate="animate"
+        variants={skeletonVariants}
+        style={{
+          backgroundImage:
+            "linear-gradient(120deg, rgba(58,67,94,0.4) 0%, rgba(86,97,133,0.85) 50%, rgba(58,67,94,0.4) 100%)",
+          backgroundSize: "200% 100%",
+        }}
+      >
+        <div className="absolute inset-0 bg-gradient-to-b from-white/10 via-transparent to-white/5" />
+        <div className="absolute inset-x-6 top-6 flex flex-col gap-4">
+          <div className="h-10 w-10 rounded-full bg-white/15" />
+          <div className="h-3 w-1/2 rounded-full bg-white/10" />
+        </div>
+        <div className="absolute inset-x-6 bottom-6 flex flex-col gap-3">
+          <div className="h-3 rounded-full bg-white/10" />
+          <div className="h-3 w-2/3 rounded-full bg-white/10" />
+        </div>
+      </motion.div>
+      <div className="flex w-[78%] flex-col gap-2">
+        <div className="h-3 rounded-full bg-white/5" />
+        <div className="h-3 w-2/3 rounded-full bg-white/5" />
+      </div>
+    </div>
+  );
+}
 
 function getOutfitKey(outfit: { image?: unknown; name?: unknown } | null) {
   if (!outfit) {
@@ -62,7 +102,7 @@ function dedupeOutfits(outfits: Outfit[]): Outfit[] {
 function getPlaceholders(count: number = PLACEHOLDER_COUNT): OutfitCard[] {
   return Array.from({ length: count }, (_, i) => ({
     name: "Generating outfit...",
-    image: "/spinner.gif",
+    image: "",
     tags: [],
     source_url: null,
     isPlaceholder: true,
@@ -366,16 +406,24 @@ export default function OutfitSwipe() {
                 }}
                 onDragEnd={handleDragEnd}
               >
-                <motion.img
-                  src={outfit.image}
-                  alt={outfit.name}
-                  className="absolute inset-0 h-full w-full object-cover"
-                  style={{ zIndex: 1 }}
-                  draggable={false}
-                />
-                <div className="absolute bottom-0 left-0 w-full px-6 pb-6 flex flex-col items-center z-10">
+                {outfit.isPlaceholder ? (
+                  <PlaceholderSkeleton />
+                ) : (
+                  <motion.img
+                    src={outfit.image}
+                    alt={outfit.name}
+                    className="absolute inset-0 h-full w-full object-cover"
+                    style={{ zIndex: 10 }}
+                    draggable={false}
+                  />
+                )}
+                <div className="absolute bottom-0 left-0 w-full px-6 pb-6 flex flex-col items-center z-20">
                   {outfit.isPlaceholder && (
-                    <div className="text-gray-300 text-sm">
+                    <div className="flex items-center gap-2 text-sm text-gray-300">
+                      <span className="relative flex h-2 w-2">
+                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-gray-400 opacity-75" />
+                        <span className="relative inline-flex h-2 w-2 rounded-full bg-gray-200" />
+                      </span>
                       Generating outfit...
                     </div>
                   )}
