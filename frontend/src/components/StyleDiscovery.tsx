@@ -32,6 +32,7 @@ const questions = [
       { label: "Hourglass", icon: <Users size={28} /> },
       { label: "Pear", icon: <Users size={28} /> },
       { label: "Round", icon: <Users size={28} /> },
+      { label: "Inverted Triangle", icon: <Users size={28} /> },
     ],
   },
 ];
@@ -320,26 +321,29 @@ export default function StyleDiscovery() {
               </h2>
 
               <div className="grid gap-3 sm:grid-cols-2">
-                {options.map((option, index) => {
+                {options.map((option) => {
                   const isSelected =
                     answers[activeQuestion.key] === option.label;
-                  const spanClass =
-                    isOddOptionCount && index === options.length - 1
-                      ? "sm:col-span-2 sm:mx-auto sm:max-w-[16rem] sm:justify-self-center"
-                      : "";
+                  const isWideOption =
+                    isOddOptionCount &&
+                    activeQuestion.key === "bodyShape" &&
+                    option.label === "Inverted Triangle";
+                  const spanClass = isWideOption
+                    ? "sm:col-span-2 sm:justify-self-stretch"
+                    : "";
 
-                  return (
-                    <button
-                      key={option.label}
-                      type="button"
-                      onClick={() => handleSelect(option.label)}
-                      disabled={locked || loading}
-                      className={`relative flex h-full flex-col items-center justify-center gap-3 rounded-2xl border px-4 py-5 text-center transition duration-300 focus:outline-none focus:ring-2 focus:ring-pink-400/40 ${
-                        isSelected
-                          ? "border-white/30 bg-white/10 text-white shadow-[0_14px_32px_rgba(236,72,153,0.25)]"
-                          : "border-white/5 bg-white/5 text-white/70 hover:border-pink-400/60 hover:text-white hover:shadow-[0_12px_28px_rgba(217,70,239,0.2)]"
-                      } ${spanClass}`}
-                    >
+              return (
+                <button
+                  key={option.label}
+                  type="button"
+                  onClick={() => handleSelect(option.label)}
+                  disabled={locked || loading}
+                  className={`relative flex h-full w-full flex-col items-center justify-center gap-3 rounded-2xl border px-4 py-5 text-center transition duration-300 focus:outline-none focus:ring-2 focus:ring-pink-400/40 ${
+                    isSelected
+                      ? "border-white/30 bg-white/10 text-white shadow-[0_14px_32px_rgba(236,72,153,0.25)]"
+                      : "border-white/5 bg-white/5 text-white/70 hover:border-pink-400/60 hover:text-white hover:shadow-[0_12px_28px_rgba(217,70,239,0.2)]"
+                    } ${spanClass}`}
+                >
                       <span className="flex h-11 w-11 items-center justify-center rounded-full bg-white/5 text-white">
                         {option.icon}
                       </span>
